@@ -1,7 +1,7 @@
 FROM node:16-slim
 
 # Define build arguments for branch and base path
-ARG BRANCH=main
+ARG BRANCH=beta
 ARG BASE_PATH=/
 
 # Install git
