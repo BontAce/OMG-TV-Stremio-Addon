@@ -87,6 +87,10 @@ async function startAddon() {
         router.get('/', (req, res) => {
             const baseUrl = generatedConfig.getBaseUrl();
             const manifestUrl = generatedConfig.getManifestUrl();
+            
+            // Rimuovi il protocollo e ottieni il percorso completo
+            const fullPath = baseUrl.replace(/^https?:\/\//, '');
+            const installUrl = `stremio://${fullPath}/manifest.json`;
 
             res.send(`
             <!DOCTYPE html>
@@ -169,7 +173,7 @@ async function startAddon() {
                     <p class="description">${generatedConfig.manifest.description}</p>
                     
                     <div class="actions">
-                        <a href="stremio://${baseUrl.replace(/^https?:\/\//, '')}/manifest.json" class="btn">Installa in Stremio</a>
+                        <a href="${installUrl}" class="btn">Installa in Stremio</a>
                         <a href="#" onclick="copyManifestLink()" class="btn btn-secondary">Copia Link Manifest</a>
                     </div>
                 </div>
