@@ -60,6 +60,7 @@ async function generateConfig() {
 async function startAddon() {
     try {
         const generatedConfig = await generateConfig();
+
         const builder = new addonBuilder(generatedConfig.manifest);
 
         builder.defineStreamHandler(streamHandler);
@@ -69,21 +70,24 @@ async function startAddon() {
         const CacheManager = require('./cache-manager')(generatedConfig);
 
         await CacheManager.updateCache(true).catch(error => {
-            console.error('Errore aggiornamento cache iniziale:', error);
+            console.error('Error updating cache on startup:', error);
         });
 
+        // Ottieni i dati della cache (inclusi gli URL EPG dai file M3U)
         const cachedData = CacheManager.getCachedData();
+
+        // Combina l'URL EPG da link.epg con quelli trovati nei file M3U
         const allEpgUrls = [];
-        
         if (generatedConfig.EPG_URL) {
-            allEpgUrls.push(generatedConfig.EPG_URL);
+            allEpgUrls.push(generatedConfig.EPG_URL); // Aggiungi l'URL EPG da link.epg
         }
         if (cachedData.epgUrls) {
-            allEpgUrls.push(...cachedData.epgUrls);
+            allEpgUrls.push(...cachedData.epgUrls); // Aggiungi gli URL EPG dai file M3U
         }
 
+        // Inizializza l'EPGManager con tutti gli URL EPG combinati
         if (allEpgUrls.length > 0) {
-            const combinedEpgUrl = allEpgUrls.join(',');
+            const combinedEpgUrl = allEpgUrls.join(','); // Combina gli URL EPG in una stringa separata da virgole
             await EPGManager.initializeEPG(combinedEpgUrl);
         }
 
@@ -135,15 +139,22 @@ async function startAddon() {
             text-decoration: underline;
         }
     </style>
+    <script>
+        function copyManifestLink() {
+            const manifestUrl = window.location.href + 'manifest.json';
+            navigator.clipboard.writeText(manifestUrl).then(() => {
+                alert('Link del manifest copiato negli appunti!');
+            });
+        }
+    </script>
 </head>
 <body>
     <img class="logo" src="${landing.logo}" />
     <h1 style="color: white">${landing.name}</h1>
     <h2 style="color: white">${landing.description}</h2>
-    <button onclick="window.location = 'stremio://' + window.location.host + '/manifest.json'">
+    <button onclick="window.location = 'stremio://${landing.transportUrl}/manifest.json'">
         Aggiungi a Stremio
     </button>
-    <p style="color: white">Manifest URL: http://localhost:${generatedConfig.port}/manifest.json</p>
 </body>
 </html>`;
 
@@ -151,12 +162,12 @@ async function startAddon() {
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
 
         await serveHTTP(addonInterface, { 
-            port: generatedConfig.port,
+            port: generatedConfig.port, 
             landingTemplate 
         });
         
         console.log('Addon attivo su:', `http://localhost:${generatedConfig.port}`);
-        console.log('Manifest URL:', `http://localhost:${generatedConfig.port}/manifest.json`);
+        console.log('Aggiungi il seguente URL a Stremio:', `http://localhost:${generatedConfig.port}/manifest.json`);
 
         if (generatedConfig.enableEPG) {
             const cachedData = CacheManager.getCachedData();
@@ -166,7 +177,7 @@ async function startAddon() {
         }
         
     } catch (error) {
-        console.error('Errore durante l\'avvio dell\'addon:', error);
+        console.error('Failed to start addon:', error);
         process.exit(1);
     }
 }
