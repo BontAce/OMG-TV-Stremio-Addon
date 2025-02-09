@@ -75,20 +75,12 @@ async function startAddon() {
         const app = express();
         const addonInterface = builder.getInterface();
 
-        // Gestione subpath
-        const router = express.Router();
+        // Funzione per generare la pagina di installazione
+        const generateInstallPage = (baseUrl, manifestUrl) => {
+            const fullPath = baseUrl.replace(/^https?:\/\//, '');
+            const installUrl = `stremio://${fullPath}/manifest.json`;
 
-        // Route per il manifest
-        router.get('/manifest.json', (req, res) => {
-            res.json(addonInterface.manifest);
-        });
-
-        // Route per la pagina di installazione principale
-        router.get('/', (req, res) => {
-            const baseUrl = generatedConfig.getBaseUrl();
-            const manifestUrl = generatedConfig.getManifestUrl();
-
-            res.send(`
+            return `
             <!DOCTYPE html>
             <html lang="it">
             <head>
@@ -169,13 +161,28 @@ async function startAddon() {
                     <p class="description">${generatedConfig.manifest.description}</p>
                     
                     <div class="actions">
-                        <a href="stremio://${baseUrl.replace(/^https?:\/\//, '')}/manifest.json" class="btn">Installa in Stremio</a>
+                        <a href="${installUrl}" class="btn">Installa in Stremio</a>
                         <a href="#" onclick="copyManifestLink()" class="btn btn-secondary">Copia Link Manifest</a>
                     </div>
                 </div>
             </body>
             </html>
-            `);
+            `;
+        };
+
+        // Configurazione delle route
+        const router = express.Router();
+
+        // Route per il manifest
+        router.get('/manifest.json', (req, res) => {
+            res.json(addonInterface.manifest);
+        });
+
+        // Route per la pagina di installazione principale
+        router.get('/', (req, res) => {
+            const baseUrl = generatedConfig.getBaseUrl();
+            const manifestUrl = generatedConfig.getManifestUrl();
+            res.send(generateInstallPage(baseUrl, manifestUrl));
         });
 
         // Route per gestire gli stream e il catalogo
@@ -194,7 +201,14 @@ async function startAddon() {
         if (generatedConfig.SUBPATH) {
             const subpath = '/' + generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
             app.use(subpath, router);
+            // Aggiungi una route root che reindirizza al subpath
+            app.get('/', (req, res) => {
+                const baseUrl = generatedConfig.getBaseUrl();
+                const manifestUrl = generatedConfig.getManifestUrl();
+                res.send(generateInstallPage(baseUrl, manifestUrl));
+            });
         } else {
+            // Se non c'è subpath, usa le route direttamente
             app.use(router);
         }
 
