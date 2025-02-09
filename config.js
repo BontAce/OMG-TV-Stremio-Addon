@@ -10,7 +10,7 @@ const baseConfig = {
     PROXY_PASSWORD: process.env.PROXY_PASSWORD || null,
     FORCE_PROXY: process.env.FORCE_PROXY === 'yes',
     DOMAIN: process.env.DOMAIN || null,
-    SUBPATH: process.env.SUBPATH || '',
+    SUBPATH: process.env.SUBPATH ? process.env.SUBPATH.replace(/^\/|\/$/g, '') : '',
     cacheSettings: {
         updateInterval: 12 * 60 * 60 * 1000,
         maxAge: 24 * 60 * 60 * 1000,
@@ -63,31 +63,16 @@ function loadCustomConfig() {
         const addonConfigExists = fs.existsSync(configOverridePath);
 
         if (addonConfigExists) {
-            baseConfig.M3U_URL = process.env.M3U_URL || baseConfig.M3U_URL;
-            baseConfig.EPG_URL = process.env.EPG_URL || baseConfig.EPG_URL;
-        }
-
-        if (addonConfigExists) {
             const customConfig = JSON.parse(fs.readFileSync(configOverridePath, 'utf8'));
-
-            const mergedConfig = {
+            
+            // Merge delle configurazioni con priorità alle env variables
+            return {
                 ...baseConfig,
-                manifest: {
-                    ...baseConfig.manifest,
-                    id: customConfig.addonId || baseConfig.manifest.id,
-                    name: customConfig.addonName || baseConfig.manifest.name,
-                    description: customConfig.addonDescription || baseConfig.manifest.description,
-                    version: customConfig.addonVersion || baseConfig.manifest.version,
-                    logo: customConfig.addonLogo || baseConfig.manifest.logo,
-                    catalogs: [{
-                        ...baseConfig.manifest.catalogs[0],
-                        id: addonConfigExists ? 'omg_plus_tv' : baseConfig.manifest.catalogs[0].id,
-                        name: addonConfigExists ? 'OMG+ TV' : baseConfig.manifest.catalogs[0].name
-                    }]
-                }
+                ...customConfig,
+                M3U_URL: process.env.M3U_URL || customConfig.M3U_URL || baseConfig.M3U_URL,
+                EPG_URL: process.env.EPG_URL || customConfig.EPG_URL || baseConfig.EPG_URL,
+                SUBPATH: process.env.SUBPATH || customConfig.SUBPATH || baseConfig.SUBPATH
             };
-
-            return mergedConfig;
         }
     } catch (error) {
         console.error('Errore nel caricare la configurazione personalizzata:', error);
@@ -98,17 +83,16 @@ function loadCustomConfig() {
 
 const config = loadCustomConfig();
 
-// Funzione per ottenere l'URL base dell'addon
+// Funzione per ottenere l'URL base dell'addon ottimizzata per Nginx
 config.getBaseUrl = function() {
     if (this.DOMAIN) {
-        const domain = this.DOMAIN.replace(/\/$/, ''); // Rimuove eventuale slash finale
-        const subpath = this.SUBPATH ? '/' + this.SUBPATH.replace(/^\/|\/$/g, '') : '';
+        const domain = this.DOMAIN.replace(/\/$/, '');
+        const subpath = this.SUBPATH ? `/${this.SUBPATH.replace(/^\/|\/$/g, '')}` : '';
         return `${domain}${subpath}`;
     }
-    return `http://localhost:${this.port}`;
+    return `http://localhost:${this.port}${this.SUBPATH ? `/${this.SUBPATH}` : ''}`;
 };
 
-// Funzione per ottenere l'URL completo del manifest
 config.getManifestUrl = function() {
     return `${this.getBaseUrl()}/manifest.json`;
 };
