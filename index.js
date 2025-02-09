@@ -1,3 +1,4 @@
+const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
 const PlaylistTransformer = require('./playlist-transformer');
 const { catalogHandler, streamHandler } = require('./handlers');
@@ -101,79 +102,99 @@ async function startAddon() {
             await EPGManager.initializeEPG(combinedEpgUrl);
         }
 
-        const landingTemplate = landing => `
-<!DOCTYPE html>
-<html style="background: #000">
-<head>
-    <meta charset="utf-8">
-    <title>${landing.name} - Stremio Addon</title>
-    <style>
-        body {
-            background: #000;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            text-align: center;
-            padding: 50px;
-        }
-        h1 { color: #fff; }
-        .logo {
-            width: 150px;
-            margin: 0 auto;
-            display: block;
-        }
-        button {
-            border: 0;
-            outline: 0;
-            color: #fff;
-            background: #8A5AAB;
-            padding: 13px 30px;
-            margin: 20px 5px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 5px;
-        }
-        button:hover {
-            background: #9B6BC3;
-        }
-        .footer {
-            margin-top: 50px;
-            font-size: 14px;
-            color: #666;
-        }
-        .footer a {
-            color: #8A5AAB;
-            text-decoration: none;
-        }
-        .footer a:hover {
-            text-decoration: underline;
-        }
-    </style>
-    <script>
-        function copyManifestLink() {
-            const manifestUrl = window.location.href + 'manifest.json';
-            navigator.clipboard.writeText(manifestUrl).then(() => {
-                alert('Link del manifest copiato negli appunti!');
-            });
-        }
-    </script>
-</head>
-<body>
-    <img class="logo" src="${landing.logo}" />
-    <h1 style="color: white">${landing.name}</h1>
-    <h2 style="color: white">${landing.description}</h2>
-    <button onclick="copyManifestLink()">
-        Copia link manifest
-    </button>
-</body>
-</html>`;
+        const app = express();
 
-        const addonInterface = builder.getInterface();
+        // Pagina di landing personalizzata
+        app.get('/', (req, res) => {
+            res.send(`
+            <!DOCTYPE html>
+            <html style="background: #000">
+            <head>
+                <meta charset="utf-8">
+                <title>${generatedConfig.manifest.name} - Stremio Addon</title>
+                <style>
+                    body {
+                        background: #000;
+                        color: #fff;
+                        font-family: Arial, sans-serif;
+                        text-align: center;
+                        padding: 50px;
+                    }
+                    h1 { color: #fff; }
+                    .logo {
+                        width: 150px;
+                        margin: 0 auto;
+                        display: block;
+                    }
+                    form {
+                        max-width: 400px;
+                        margin: 20px auto;
+                        background: #222;
+                        padding: 20px;
+                        border-radius: 10px;
+                    }
+                    input, button {
+                        width: 100%;
+                        margin: 10px 0;
+                        padding: 10px;
+                        border: none;
+                        border-radius: 5px;
+                    }
+                    input {
+                        background: #333;
+                        color: #fff;
+                    }
+                    button {
+                        background: #8A5AAB;
+                        color: #fff;
+                        cursor: pointer;
+                    }
+                    button:hover {
+                        background: #9B6BC3;
+                    }
+                </style>
+            </head>
+            <body>
+                <img class="logo" src="${generatedConfig.manifest.logo}" alt="Addon Logo" />
+                <h1>${generatedConfig.manifest.name}</h1>
+                <p>${generatedConfig.manifest.description}</p>
+                
+                <form id="configForm">
+                    <input type="url" id="m3uUrl" placeholder="M3U Playlist URL" value="${generatedConfig.M3U_URL}" required>
+                    <input type="url" id="epgUrl" placeholder="EPG URL (optional)" value="${generatedConfig.EPG_URL || ''}">
+                    <button type="submit">Configure Addon</button>
+                </form>
+
+                <script>
+                    document.getElementById('configForm').addEventListener('submit', function(e) {
+                        e.preventDefault();
+                        const m3uUrl = document.getElementById('m3uUrl').value;
+                        const epgUrl = document.getElementById('epgUrl').value;
+
+                        // Costruisci l'URL del manifest con i parametri
+                        const params = new URLSearchParams({
+                            m3uUrl,
+                            ...(epgUrl && {epgUrl})
+                        });
+
+                        const manifestUrl = `${window.location.origin}${window.location.pathname}manifest.json?${params.toString()}`;
+                        
+                        // Apri Stremio con la configurazione personalizzata
+                        window.location.href = `stremio://${manifestUrl.replace(/^https?:\/\//i, '')}`;
+                    });
+                </script>
+            </body>
+            </html>
+            `);
+        });
+
+        // Passa l'app Express a serveHTTP
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
+        const addonInterface = builder.getInterface();
 
         const addonOptions = {
             port: generatedConfig.port,
-            landingTemplate
+            expressApp: app  // Passa l'app Express personalizzata
         };
 
         if (generatedConfig.SUBPATH) {
