@@ -9,6 +9,9 @@ const baseConfig = {
     PROXY_URL: process.env.PROXY_URL || null,
     PROXY_PASSWORD: process.env.PROXY_PASSWORD || null,
     FORCE_PROXY: process.env.FORCE_PROXY === 'yes',
+    // Nuove configurazioni per il dominio
+    DOMAIN: process.env.DOMAIN || null,
+    SUBPATH: process.env.SUBPATH || '',
     cacheSettings: {
         updateInterval: 12 * 60 * 60 * 1000,
         maxAge: 24 * 60 * 60 * 1000,
@@ -56,7 +59,7 @@ const baseConfig = {
 
 function loadCustomConfig() {
     const configOverridePath = path.join(__dirname, 'addon-config.json');
-    
+
     try {
         const addonConfigExists = fs.existsSync(configOverridePath);
 
@@ -67,7 +70,7 @@ function loadCustomConfig() {
 
         if (addonConfigExists) {
             const customConfig = JSON.parse(fs.readFileSync(configOverridePath, 'utf8'));
-            
+
             const mergedConfig = {
                 ...baseConfig,
                 manifest: {
@@ -95,6 +98,21 @@ function loadCustomConfig() {
 }
 
 const config = loadCustomConfig();
+
+// Funzione per ottenere l'URL base dell'addon
+config.getBaseUrl = function() {
+    if (this.DOMAIN) {
+        const domain = this.DOMAIN.replace(/\/$/, ''); // Rimuove eventuale slash finale
+        const subpath = this.SUBPATH ? '/' + this.SUBPATH.replace(/^\/|\/$/g, '') : '';
+        return `${domain}${subpath}`;
+    }
+    return `http://localhost:${this.port}`;
+};
+
+// Funzione per ottenere l'URL completo del manifest
+config.getManifestUrl = function() {
+    return `${this.getBaseUrl()}/manifest.json`;
+};
 
 config.updateEPGUrl = function(url) {
     if (!this.EPG_URL && url) {
