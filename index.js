@@ -61,6 +61,14 @@ async function startAddon() {
     try {
         const generatedConfig = await generateConfig();
 
+        // Aggiornamento transportUrl nel manifest in base al dominio configurato
+        const baseUrl = generatedConfig.getBaseUrl();
+        const manifestUrl = generatedConfig.getManifestUrl();
+        
+        // Rimuovi lo schema dal transportUrl
+        const transportUrl = manifestUrl.replace(/^https?:\/\//i, '');
+        generatedConfig.manifest.transportUrl = transportUrl;
+
         const builder = new addonBuilder(generatedConfig.manifest);
 
         builder.defineStreamHandler(streamHandler);
@@ -73,21 +81,18 @@ async function startAddon() {
             console.error('Error updating cache on startup:', error);
         });
 
-        // Ottieni i dati della cache (inclusi gli URL EPG dai file M3U)
         const cachedData = CacheManager.getCachedData();
 
-        // Combina l'URL EPG da link.epg con quelli trovati nei file M3U
         const allEpgUrls = [];
         if (generatedConfig.EPG_URL) {
-            allEpgUrls.push(generatedConfig.EPG_URL); // Aggiungi l'URL EPG da link.epg
+            allEpgUrls.push(generatedConfig.EPG_URL);
         }
         if (cachedData.epgUrls) {
-            allEpgUrls.push(...cachedData.epgUrls); // Aggiungi gli URL EPG dai file M3U
+            allEpgUrls.push(...cachedData.epgUrls);
         }
 
-        // Inizializza l'EPGManager con tutti gli URL EPG combinati
         if (allEpgUrls.length > 0) {
-            const combinedEpgUrl = allEpgUrls.join(','); // Combina gli URL EPG in una stringa separata da virgole
+            const combinedEpgUrl = allEpgUrls.join(',');
             await EPGManager.initializeEPG(combinedEpgUrl);
         }
 
@@ -155,19 +160,29 @@ async function startAddon() {
     <button onclick="window.location = 'stremio://${landing.transportUrl}/manifest.json'">
         Aggiungi a Stremio
     </button>
+    <button onclick="copyManifestLink()">
+        Copia link manifest
+    </button>
 </body>
 </html>`;
 
         const addonInterface = builder.getInterface();
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
 
-        await serveHTTP(addonInterface, { 
-            port: generatedConfig.port, 
-            landingTemplate 
-        });
+        // Configura il percorso base per l'addon se è definito un sottopercorso
+        const addonOptions = {
+            port: generatedConfig.port,
+            landingTemplate
+        };
+
+        if (generatedConfig.SUBPATH) {
+            addonOptions.path = '/' + generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
+        }
+
+        await serveHTTP(addonInterface, addonOptions);
         
-        console.log('Addon attivo su:', `http://localhost:${generatedConfig.port}`);
-        console.log('Aggiungi il seguente URL a Stremio:', `http://localhost:${generatedConfig.port}/manifest.json`);
+        console.log('Addon attivo su:', baseUrl);
+        console.log('URL Manifest:', manifestUrl);
 
         if (generatedConfig.enableEPG) {
             const cachedData = CacheManager.getCachedData();
