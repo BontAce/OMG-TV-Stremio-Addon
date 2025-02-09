@@ -170,53 +170,57 @@ async function startAddon() {
             `;
         };
 
-        // Configurazione delle route
-        const manifestRoute = (req, res) => {
+        // Gestione del subpath
+        const baseRouter = express.Router();
+        
+        // Manifest route
+        baseRouter.get('/manifest.json', (req, res) => {
             res.json(addonInterface.manifest);
-        };
+        });
 
-        const installPageRoute = (req, res) => {
+        // Home page route
+        baseRouter.get('/', (req, res) => {
             const baseUrl = generatedConfig.getBaseUrl();
             const manifestUrl = generatedConfig.getManifestUrl();
             res.send(generateInstallPage(baseUrl, manifestUrl));
-        };
+        });
 
-        // Gestione del subpath
-        if (generatedConfig.SUBPATH) {
-            const subpath = '/' + generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
-            
-            // Route con subpath
-            app.get(`${subpath}/manifest.json`, manifestRoute);
-            app.get(`${subpath}/`, installPageRoute);
-            
-            // Route root che reindirizza al subpath
-            app.get('/', (req, res) => res.redirect(subpath));
-        } else {
-            // Route senza subpath
-            app.get('/manifest.json', manifestRoute);
-            app.get('/', installPageRoute);
-        }
-
-        // Route per gestire gli stream e il catalogo
-        const streamRoute = (req, res) => {
+        // Stream route
+        baseRouter.get('/stream/:type/:id', (req, res) => {
             const { type, id } = req.params;
             streamHandler({ type, id }).then(result => res.json(result));
-        };
+        });
 
-        const catalogRoute = (req, res) => {
+        // Catalog route
+        baseRouter.get('/catalog/:type/:id', (req, res) => {
             const { type, id } = req.params;
             const { genre, search, skip } = req.query;
             catalogHandler({ type, id, extra: { genre, search, skip } }).then(result => res.json(result));
-        };
+        });
 
-        // Aggiunta delle route per stream e catalogo
+        // Configurazione finale delle route
         if (generatedConfig.SUBPATH) {
             const subpath = '/' + generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
-            app.get(`${subpath}/stream/:type/:id`, streamRoute);
-            app.get(`${subpath}/catalog/:type/:id`, catalogRoute);
+            
+            // Middleware per rimuovere lo slash finale
+            app.use((req, res, next) => {
+                if (req.path !== '/' && req.path.endsWith('/')) {
+                    const query = req.url.slice(req.path.length);
+                    res.redirect(301, req.path.slice(0, -1) + query);
+                    return;
+                }
+                next();
+            });
+
+            app.use(subpath, baseRouter);
+            
+            // Route root che non fa redirect
+            app.get('/', (req, res) => {
+                res.redirect(subpath);
+            });
         } else {
-            app.get('/stream/:type/:id', streamRoute);
-            app.get('/catalog/:type/:id', catalogRoute);
+            // Senza subpath, usa le route base
+            app.use(baseRouter);
         }
 
         // Avvio del server
