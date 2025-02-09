@@ -3,7 +3,7 @@ const PlaylistTransformer = require('./playlist-transformer');
 const { catalogHandler, streamHandler } = require('./handlers');
 const metaHandler = require('./meta-handler');
 const EPGManager = require('./epg-manager');
-const config = require('./config');
+const { createConfig, config } = require('./config');
 
 async function generateConfig() {
     try {
