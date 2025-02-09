@@ -180,12 +180,9 @@ async function startAddon() {
         };
 
         await serveHTTP(addonInterface, { 
-            port: process.env.PORT || 7860,
+            port: process.env.PORT || 7860, 
             landingTemplate,
-            path: BASE_PATH,
-            static: true,
-            cors: true,
-            customHeaders: corsHeaders
+            path: BASE_PATH
         });
         
         console.log('Addon attivo su:', PUBLIC_URL);
