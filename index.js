@@ -75,7 +75,7 @@ async function startAddon() {
         const app = express();
         const addonInterface = builder.getInterface();
 
-        // Funzione per generare la pagina di installazione
+        // Genera la pagina di installazione
         const generateInstallPage = () => {
             const baseUrl = generatedConfig.getBaseUrl();
             const manifestUrl = generatedConfig.getManifestUrl();
@@ -151,29 +151,33 @@ async function startAddon() {
             `;
         };
 
-        // Determina il percorso di mount
-        const mountPath = config.SUBPATH ? `/${config.SUBPATH.replace(/^\/|\/$/g, '')}` : '';
+        // Costruzione del percorso di mount
+        const mountPath = config.SUBPATH 
+            ? `/${config.SUBPATH.replace(/^\/|\/$/g, '')}` 
+            : '';
+
+        // Gestione reindirizzamenti per SUBPATH
+        if (config.SUBPATH) {
+            // Reindirizza da / a /subpath/
+            app.get('/', (req, res) => {
+                res.redirect(301, `${mountPath}/`);
+            });
+
+            // Reindirizza da /subpath a /subpath/
+            app.get(mountPath, (req, res) => {
+                res.redirect(301, `${mountPath}/`);
+            });
+        }
+
+        // Route principale
+        app.get(`${mountPath}/`, (req, res) => {
+            res.send(generateInstallPage());
+        });
 
         // Manifest route
         app.get(`${mountPath}/manifest.json`, (req, res) => {
             res.json(addonInterface.manifest);
         });
-
-        // Home page route
-        app.get(`${mountPath}/`, (req, res) => {
-            res.send(generateInstallPage());
-        });
-
-        // Route root che reindirizza alla home page con subpath se necessario
-        if (config.SUBPATH) {
-            app.get('/', (req, res) => {
-                res.redirect(mountPath + '/');
-            });
-        } else {
-            app.get('/', (req, res) => {
-                res.send(generateInstallPage());
-            });
-        }
 
         // Stream route
         app.get(`${mountPath}/stream/:type/:id`, (req, res) => {
