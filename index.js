@@ -65,8 +65,12 @@ async function startAddon() {
         const baseUrl = generatedConfig.getBaseUrl();
         const manifestUrl = generatedConfig.getManifestUrl();
         
-        // Rimuovi lo schema dal transportUrl
+        // Rimuovi lo schema dal transportUrl e assicurati che includa /manifest.json
         const transportUrl = manifestUrl.replace(/^https?:\/\//i, '');
+        // Assicurati che il transportUrl termini con manifest.json
+        if (!transportUrl.endsWith('/manifest.json')) {
+            transportUrl = transportUrl + '/manifest.json';
+        }
         generatedConfig.manifest.transportUrl = transportUrl;
 
         const builder = new addonBuilder(generatedConfig.manifest);
@@ -157,7 +161,7 @@ async function startAddon() {
     <img class="logo" src="${landing.logo}" />
     <h1 style="color: white">${landing.name}</h1>
     <h2 style="color: white">${landing.description}</h2>
-    <button onclick="window.location = 'stremio://${landing.transportUrl}/manifest.json'">
+    <button onclick="window.location = 'stremio://${landing.transportUrl}'">
         Aggiungi a Stremio
     </button>
     <button onclick="copyManifestLink()">
