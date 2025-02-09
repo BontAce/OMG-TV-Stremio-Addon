@@ -5,53 +5,80 @@ const PlaylistTransformer = require('./playlist-transformer');
 const { catalogHandler, streamHandler } = require('./handlers');
 const metaHandler = require('./meta-handler');
 const EPGManager = require('./epg-manager');
+const path = require('path');
+
+async function generateConfig() {
+    const transformer = new PlaylistTransformer();
+    const data = await transformer.loadAndTransform(config.M3U_URL);
+    
+    const finalConfig = {
+        ...config,
+        manifest: {
+            ...config.manifest,
+            catalogs: [
+                {
+                    ...config.manifest.catalogs[0],
+                    extra: [
+                        {
+                            name: 'genre',
+                            isRequired: false,
+                            options: data.genres
+                        },
+                        {
+                            name: 'search',
+                            isRequired: false
+                        },
+                        {
+                            name: 'skip',
+                            isRequired: false
+                        }
+                    ]
+                }
+            ]
+        }
+    };
+
+    return finalConfig;
+}
 
 async function startAddon() {
     try {
-        const transformer = new PlaylistTransformer();
-        const data = await transformer.loadAndTransform(config.M3U_URL);
-        
-        // Modifica la configurazione per includere i generi
-        const finalConfig = {
-            ...config,
-            manifest: {
-                ...config.manifest,
-                catalogs: [
-                    {
-                        ...config.manifest.catalogs[0],
-                        extra: [
-                            {
-                                name: 'genre',
-                                isRequired: false,
-                                options: data.genres
-                            },
-                            {
-                                name: 'search',
-                                isRequired: false
-                            },
-                            {
-                                name: 'skip',
-                                isRequired: false
-                            }
-                        ]
-                    }
-                ]
-            }
-        };
-
-        const builder = new addonBuilder(finalConfig.manifest);
+        const generatedConfig = await generateConfig();
+        const builder = new addonBuilder(generatedConfig.manifest);
 
         builder.defineStreamHandler(streamHandler);
         builder.defineCatalogHandler(catalogHandler);
         builder.defineMetaHandler(metaHandler);
 
+        const CacheManager = require('./cache-manager')(generatedConfig);
+
+        await CacheManager.updateCache(true).catch(error => {
+            console.error('Error updating cache on startup:', error);
+        });
+
+        const cachedData = CacheManager.getCachedData();
+
+        const allEpgUrls = [];
+        if (generatedConfig.EPG_URL) {
+            allEpgUrls.push(generatedConfig.EPG_URL);
+        }
+        if (cachedData.epgUrls) {
+            allEpgUrls.push(...cachedData.epgUrls);
+        }
+
+        if (allEpgUrls.length > 0) {
+            const combinedEpgUrl = allEpgUrls.join(',');
+            await EPGManager.initializeEPG(combinedEpgUrl);
+        }
+
+        // Configurazione Express
         const app = express();
         const addonInterface = builder.getInterface();
 
         // Funzione per generare la pagina di installazione
         const generateInstallPage = () => {
-            const baseUrl = config.getBaseUrl();
-            const manifestUrl = config.getManifestUrl();
+            const baseUrl = generatedConfig.getBaseUrl();
+            const manifestUrl = generatedConfig.getManifestUrl();
             const fullPath = baseUrl.replace(/^https?:\/\//, '');
             const installUrl = `stremio://${fullPath}/manifest.json`;
 
@@ -61,7 +88,7 @@ async function startAddon() {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>${finalConfig.manifest.name} - Stremio Addon</title>
+                <title>${generatedConfig.manifest.name} - Stremio Addon</title>
                 <style>
                     body { 
                         font-family: Arial, sans-serif; 
@@ -79,6 +106,12 @@ async function startAddon() {
                         padding: 2rem;
                         border-radius: 10px;
                         max-width: 400px;
+                        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    }
+                    .logo {
+                        max-width: 150px;
+                        margin-bottom: 1rem;
+                        border-radius: 10px;
                     }
                     .btn {
                         display: inline-block;
@@ -88,20 +121,26 @@ async function startAddon() {
                         margin: 10px;
                         text-decoration: none;
                         border-radius: 5px;
+                        transition: background-color 0.3s ease;
+                    }
+                    .btn:hover {
+                        background-color: #9661DB;
                     }
                 </style>
             </head>
             <body>
                 <div class="container">
-                    <h1>${finalConfig.manifest.name}</h1>
-                    <p>${finalConfig.manifest.description}</p>
+                    <img src="${generatedConfig.manifest.logo}" alt="Logo" class="logo">
+                    <h1>${generatedConfig.manifest.name}</h1>
+                    <p>${generatedConfig.manifest.description}</p>
                     <div>
                         <a href="${installUrl}" class="btn">Installa in Stremio</a>
                         <a href="#" onclick="copyManifestLink()" class="btn">Copia Link Manifest</a>
                     </div>
                     <script>
                         function copyManifestLink() {
-                            navigator.clipboard.writeText('${manifestUrl}').then(() => {
+                            const manifestUrl = '${manifestUrl}';
+                            navigator.clipboard.writeText(manifestUrl).then(() => {
                                 alert('Link del manifest copiato!');
                             });
                         }
@@ -112,49 +151,62 @@ async function startAddon() {
             `;
         };
 
-        // Configurazione delle route
-        const router = express.Router();
+        // Determina il percorso di mount
+        const mountPath = config.SUBPATH ? `/${config.SUBPATH.replace(/^\/|\/$/g, '')}` : '';
 
         // Manifest route
-        router.get('/manifest.json', (req, res) => {
+        app.get(`${mountPath}/manifest.json`, (req, res) => {
             res.json(addonInterface.manifest);
         });
 
         // Home page route
-        router.get('/', (req, res) => {
+        app.get(`${mountPath}/`, (req, res) => {
             res.send(generateInstallPage());
         });
 
+        // Route root che reindirizza alla home page con subpath se necessario
+        if (config.SUBPATH) {
+            app.get('/', (req, res) => {
+                res.redirect(mountPath + '/');
+            });
+        } else {
+            app.get('/', (req, res) => {
+                res.send(generateInstallPage());
+            });
+        }
+
         // Stream route
-        router.get('/stream/:type/:id', (req, res) => {
+        app.get(`${mountPath}/stream/:type/:id`, (req, res) => {
             const { type, id } = req.params;
             streamHandler({ type, id }).then(result => res.json(result));
         });
 
         // Catalog route
-        router.get('/catalog/:type/:id', (req, res) => {
+        app.get(`${mountPath}/catalog/:type/:id`, (req, res) => {
             const { type, id } = req.params;
             const { genre, search, skip } = req.query;
             catalogHandler({ type, id, extra: { genre, search, skip } }).then(result => res.json(result));
         });
 
-        // Gestione del subpath
-        if (config.SUBPATH) {
-            const subpath = '/' + config.SUBPATH.replace(/^\/|\/$/g, '');
-            app.use(subpath, router);
-        } else {
-            app.use(router);
-        }
-
         // Avvio del server
         const port = config.port || 10000;
         app.listen(port, () => {
-            console.log(`Server attivo su porta ${port}`);
-            console.log('URL Manifest:', config.getManifestUrl());
+            const baseUrl = generatedConfig.getBaseUrl();
+            const manifestUrl = generatedConfig.getManifestUrl();
+            
+            console.log('Addon attivo su:', baseUrl);
+            console.log('URL Manifest:', manifestUrl);
         });
 
+        if (generatedConfig.enableEPG) {
+            const cachedData = CacheManager.getCachedData();
+            EPGManager.checkMissingEPG(cachedData.channels);
+        } else {
+            console.log('EPG disabilitata, skip inizializzazione');
+        }
+        
     } catch (error) {
-        console.error('Errore avvio addon:', error);
+        console.error('Failed to start addon:', error);
         process.exit(1);
     }
 }
