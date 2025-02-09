@@ -7,6 +7,7 @@ const config = require('./config');
 
 // Add base path configuration
 const BASE_PATH = process.env.BASE_PATH || '/';
+const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 7860}${BASE_PATH}`;
 
 async function generateConfig() {
     try {
@@ -17,16 +18,23 @@ async function generateConfig() {
         console.log(`Trovati ${data.genres.length} generi`);
         console.log('EPG URL configurato:', config.EPG_URL);
 
-        // Modify manifest to include base path in endpoints
         const finalConfig = {
             ...config,
             manifest: {
-                ...config.manifest,
-                // Ensure endpoints use the base path
-                endpoint: `${BASE_PATH.replace(/\/$/, '')}/manifest.json`,
+                id: "org.mccoy88f.omgplustvbeta",
+                version: "3.4.0",
+                name: "OMG+ TV beta",
+                description: "Un add-on per Stremio con playlist di canali M3U predefinita, con personalizzazione di playlist e epg.",
+                logo: "https://raw.githubusercontent.com/mccoy88f/OMG-Plus-TV-Stremio-Addon/refs/heads/main/tv.png",
+                resources: ["stream", "catalog", "meta"],
+                types: ["tv"],
+                idPrefixes: ["tv"],
+                endpoint: PUBLIC_URL + 'manifest.json',
                 catalogs: [
                     {
-                        ...config.manifest.catalogs[0],
+                        type: 'tv',
+                        id: 'omg_plus_tv',
+                        name: 'OMG+ TV',
                         extra: [
                             {
                                 name: 'genre',
@@ -97,6 +105,7 @@ async function startAddon() {
 <head>
     <meta charset="utf-8">
     <title>${landing.name} - Stremio Addon</title>
+    <base href="${BASE_PATH}">
     <style>
         body {
             background: #000;
@@ -147,7 +156,6 @@ async function startAddon() {
             });
         }
     </script>
-    <base href="${BASE_PATH}">
 </head>
 <body>
     <img class="logo" src="${landing.logo}" />
@@ -156,21 +164,31 @@ async function startAddon() {
     <button onclick="window.location = 'stremio://${landing.transportUrl}/manifest.json'">
         Aggiungi a Stremio
     </button>
+    <p style="color: white">URL manifest: ${PUBLIC_URL}manifest.json</p>
 </body>
 </html>`;
 
         const addonInterface = builder.getInterface();
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
 
+        // Add CORS headers
+        const corsHeaders = {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Headers': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS'
+        };
+
         await serveHTTP(addonInterface, { 
-            port: generatedConfig.port,
+            port: process.env.PORT || 7860,
             landingTemplate,
-            path: BASE_PATH // Add base path to server configuration
+            path: BASE_PATH,
+            static: true,
+            cors: true,
+            customHeaders: corsHeaders
         });
         
-        const fullUrl = `http://localhost:${generatedConfig.port}${BASE_PATH}`;
-        console.log('Addon attivo su:', fullUrl);
-        console.log('Aggiungi il seguente URL a Stremio:', `${fullUrl}manifest.json`);
+        console.log('Addon attivo su:', PUBLIC_URL);
+        console.log('Manifest URL:', PUBLIC_URL + 'manifest.json');
 
         if (generatedConfig.enableEPG) {
             const cachedData = CacheManager.getCachedData();
