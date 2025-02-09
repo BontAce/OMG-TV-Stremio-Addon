@@ -161,7 +161,7 @@ async function startAddon() {
     <img class="logo" src="${landing.logo}" />
     <h1 style="color: white">${landing.name}</h1>
     <h2 style="color: white">${landing.description}</h2>
-    <button onclick="window.location = 'stremio://${landing.transportUrl}/manifest.json'">
+    <button onclick="window.location = 'stremio://' + window.location.host + '${BASE_PATH}manifest.json'">
         Aggiungi a Stremio
     </button>
     <p style="color: white">URL manifest: ${PUBLIC_URL}manifest.json</p>
