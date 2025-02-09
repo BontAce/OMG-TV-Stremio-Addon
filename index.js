@@ -1,75 +1,44 @@
 const express = require('express');
 const { addonBuilder } = require('stremio-addon-sdk');
+const config = require('./config');
 const PlaylistTransformer = require('./playlist-transformer');
 const { catalogHandler, streamHandler } = require('./handlers');
 const metaHandler = require('./meta-handler');
 const EPGManager = require('./epg-manager');
-const { createConfig, config } = require('./config');
+const path = require('path');
 
 async function generateConfig() {
-    try {
-        console.log('\n=== Generazione Configurazione Iniziale ===');
-        
-        const transformer = new PlaylistTransformer();
-        const data = await transformer.loadAndTransform(config.M3U_URL);
-        console.log(`Trovati ${data.genres.length} generi`);
-        console.log('EPG URL configurato:', config.EPG_URL);
-
-        const finalConfig = {
-            ...config,
-            manifest: {
-                ...config.manifest,
-                catalogs: [
-                    {
-                        ...config.manifest.catalogs[0],
-                        extra: [
-                            {
-                                name: 'genre',
-                                isRequired: false,
-                                options: data.genres
-                            },
-                            {
-                                name: 'search',
-                                isRequired: false
-                            },
-                            {
-                                name: 'skip',
-                                isRequired: false
-                            }
-                        ]
-                    }
-                ]
-            }
-        };
-
-        // Costruisci il transportUrl corretto
-        if (finalConfig.DOMAIN) {
-            let domain = finalConfig.DOMAIN.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
-            let transportUrl = domain;
-            
-            if (finalConfig.SUBPATH) {
-                const subpath = finalConfig.SUBPATH.replace(/^\/|\/$/g, '');
-                transportUrl = `${transportUrl}/${subpath}`;
-            }
-            
-            console.log('Transport URL configurato:', transportUrl);
-            finalConfig.manifest.transportUrl = transportUrl;
+    const transformer = new PlaylistTransformer();
+    const data = await transformer.loadAndTransform(config.M3U_URL);
+    
+    const finalConfig = {
+        ...config,
+        manifest: {
+            ...config.manifest,
+            catalogs: [
+                {
+                    ...config.manifest.catalogs[0],
+                    extra: [
+                        {
+                            name: 'genre',
+                            isRequired: false,
+                            options: data.genres
+                        },
+                        {
+                            name: 'search',
+                            isRequired: false
+                        },
+                        {
+                            name: 'skip',
+                            isRequired: false
+                        }
+                    ]
+                }
+            ]
         }
+    };
 
-        console.log('Configurazione generata con i seguenti generi:');
-        console.log(data.genres.join(', '));
-        if (config.enableEPG) {
-            console.log('EPG abilitata, URL:', config.EPG_URL);
-        } else {
-            console.log('EPG disabilitata');
-        }
-        console.log('\n=== Fine Generazione Configurazione ===\n');
-
-        return finalConfig;
-    } catch (error) {
-        console.error('Errore durante la generazione della configurazione:', error);
-        throw error;
-    }
+    return finalConfig;
 }
 
 async function startAddon() {
@@ -102,112 +71,141 @@ async function startAddon() {
             await EPGManager.initializeEPG(combinedEpgUrl);
         }
 
+        // Configurazione Express
         const app = express();
+        const addonInterface = builder.getInterface();
 
-        // Pagina di landing personalizzata
-        app.get('/', (req, res) => {
+        // Gestione subpath
+        const router = express.Router();
+
+        // Route per il manifest
+        router.get('/manifest.json', (req, res) => {
+            res.json(addonInterface.manifest);
+        });
+
+        // Route per la pagina di installazione principale
+        router.get('/', (req, res) => {
+            const baseUrl = generatedConfig.getBaseUrl();
+            const manifestUrl = generatedConfig.getManifestUrl();
+
             res.send(`
             <!DOCTYPE html>
-            <html style="background: #000">
+            <html lang="it">
             <head>
-                <meta charset="utf-8">
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>${generatedConfig.manifest.name} - Stremio Addon</title>
+                <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;700&display=swap" rel="stylesheet">
                 <style>
                     body {
-                        background: #000;
-                        color: #fff;
-                        font-family: Arial, sans-serif;
+                        font-family: 'Roboto', sans-serif;
+                        background-color: #121212;
+                        color: #ffffff;
+                        margin: 0;
+                        padding: 0;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        min-height: 100vh;
                         text-align: center;
-                        padding: 50px;
                     }
-                    h1 { color: #fff; }
+                    .container {
+                        background-color: #1E1E1E;
+                        border-radius: 15px;
+                        padding: 40px;
+                        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+                        max-width: 500px;
+                        width: 90%;
+                    }
                     .logo {
-                        width: 150px;
-                        margin: 0 auto;
-                        display: block;
-                    }
-                    form {
-                        max-width: 400px;
-                        margin: 20px auto;
-                        background: #222;
-                        padding: 20px;
+                        max-width: 200px;
+                        margin-bottom: 20px;
                         border-radius: 10px;
                     }
-                    input, button {
-                        width: 100%;
-                        margin: 10px 0;
-                        padding: 10px;
-                        border: none;
-                        border-radius: 5px;
+                    h1 {
+                        color: #BB86FC;
+                        margin-bottom: 15px;
                     }
-                    input {
-                        background: #333;
-                        color: #fff;
+                    .description {
+                        color: #B0B0B0;
+                        margin-bottom: 30px;
                     }
-                    button {
-                        background: #8A5AAB;
-                        color: #fff;
-                        cursor: pointer;
+                    .btn {
+                        display: inline-block;
+                        background-color: #BB86FC;
+                        color: #000;
+                        padding: 12px 24px;
+                        text-decoration: none;
+                        border-radius: 8px;
+                        font-weight: bold;
+                        transition: all 0.3s ease;
+                        margin: 10px;
                     }
-                    button:hover {
-                        background: #9B6BC3;
+                    .btn:hover {
+                        background-color: #9661DB;
+                        transform: translateY(-3px);
+                    }
+                    .btn-secondary {
+                        background-color: #4A4A4A;
+                        color: #ffffff;
+                    }
+                    .btn-secondary:hover {
+                        background-color: #5A5A5A;
                     }
                 </style>
+                <script>
+                    function copyManifestLink() {
+                        const manifestUrl = '${manifestUrl}';
+                        navigator.clipboard.writeText(manifestUrl).then(() => {
+                            alert('Link del manifest copiato negli appunti!');
+                        });
+                    }
+                </script>
             </head>
             <body>
-                <img class="logo" src="${generatedConfig.manifest.logo}" alt="Addon Logo" />
-                <h1>${generatedConfig.manifest.name}</h1>
-                <p>${generatedConfig.manifest.description}</p>
-                
-                <form id="configForm">
-                    <input type="url" id="m3uUrl" placeholder="M3U Playlist URL" value="${generatedConfig.M3U_URL}" required>
-                    <input type="url" id="epgUrl" placeholder="EPG URL (optional)" value="${generatedConfig.EPG_URL || ''}">
-                    <button type="submit">Configure Addon</button>
-                </form>
-
-                <script>
-                    document.getElementById('configForm').addEventListener('submit', function(e) {
-                        e.preventDefault();
-                        const m3uUrl = document.getElementById('m3uUrl').value;
-                        const epgUrl = document.getElementById('epgUrl').value;
-
-                        // Costruisci l'URL del manifest con i parametri
-                        const params = new URLSearchParams({
-                            m3uUrl,
-                            ...(epgUrl && {epgUrl})
-                        });
-
-                        const manifestUrl = `${window.location.origin}${window.location.pathname}manifest.json?${params.toString()}`;
-                        
-                        // Apri Stremio con la configurazione personalizzata
-                        window.location.href = `stremio://${manifestUrl.replace(/^https?:\/\//i, '')}`;
-                    });
-                </script>
+                <div class="container">
+                    <img src="${generatedConfig.manifest.logo}" alt="Logo" class="logo">
+                    <h1>${generatedConfig.manifest.name}</h1>
+                    <p class="description">${generatedConfig.manifest.description}</p>
+                    
+                    <div class="actions">
+                        <a href="stremio://${baseUrl.replace(/^https?:\/\//, '')}/manifest.json" class="btn">Installa in Stremio</a>
+                        <a href="#" onclick="copyManifestLink()" class="btn btn-secondary">Copia Link Manifest</a>
+                    </div>
+                </div>
             </body>
             </html>
             `);
         });
 
-        // Passa l'app Express a serveHTTP
-        const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
-        const addonInterface = builder.getInterface();
+        // Route per gestire gli stream e il catalogo
+        router.get('/stream/:type/:id', (req, res) => {
+            const { type, id } = req.params;
+            streamHandler({ type, id }).then(result => res.json(result));
+        });
 
-        const addonOptions = {
-            port: generatedConfig.port,
-            expressApp: app  // Passa l'app Express personalizzata
-        };
+        router.get('/catalog/:type/:id', (req, res) => {
+            const { type, id } = req.params;
+            const { genre, search, skip } = req.query;
+            catalogHandler({ type, id, extra: { genre, search, skip } }).then(result => res.json(result));
+        });
 
+        // Gestione del subpath
         if (generatedConfig.SUBPATH) {
-            addonOptions.path = '/' + generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
+            const subpath = '/' + generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
+            app.use(subpath, router);
+        } else {
+            app.use(router);
         }
 
-        await serveHTTP(addonInterface, addonOptions);
-        
-        const baseUrl = generatedConfig.getBaseUrl();
-        const manifestUrl = generatedConfig.getManifestUrl();
-        
-        console.log('Addon attivo su:', baseUrl);
-        console.log('URL Manifest:', manifestUrl);
+        // Avvio del server
+        const server = app.listen(generatedConfig.port, () => {
+            const baseUrl = generatedConfig.getBaseUrl();
+            const manifestUrl = generatedConfig.getManifestUrl();
+            
+            console.log('Addon attivo su:', baseUrl);
+            console.log('URL Manifest:', manifestUrl);
+        });
 
         if (generatedConfig.enableEPG) {
             const cachedData = CacheManager.getCachedData();
