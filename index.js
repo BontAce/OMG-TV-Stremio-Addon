@@ -8,7 +8,7 @@ const config = require('./config');
 async function generateConfig() {
     try {
         console.log('\n=== Generazione Configurazione Iniziale ===');
-
+        
         const transformer = new PlaylistTransformer();
         const data = await transformer.loadAndTransform(config.M3U_URL);
         console.log(`Trovati ${data.genres.length} generi`);
@@ -64,9 +64,16 @@ async function startAddon() {
         // Aggiornamento transportUrl nel manifest in base al dominio configurato
         const baseUrl = generatedConfig.getBaseUrl();
         const manifestUrl = generatedConfig.getManifestUrl();
-
+        
         // Prepara il transportUrl mantenendo il percorso completo fino a manifest.json
-        const transportUrl = manifestUrl.replace(/^https?:\/\//i, '');
+        let transportUrl = baseUrl.replace(/^https?:\/\//i, '');
+        if (generatedConfig.SUBPATH) {
+            // Assicurati che il subpath sia incluso correttamente
+            const subpath = generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
+            transportUrl = `${transportUrl}/${subpath}`;
+        }
+        // Aggiungi manifest.json
+        transportUrl = `${transportUrl}/manifest.json`;
         generatedConfig.manifest.transportUrl = transportUrl;
 
         const builder = new addonBuilder(generatedConfig.manifest);
@@ -160,6 +167,7 @@ async function startAddon() {
     <button onclick="window.location = 'stremio://${landing.transportUrl}'">
         Aggiungi a Stremio
     </button>
+    <p style="color: white">Link: stremio://${landing.transportUrl}</p>
     <button onclick="copyManifestLink()">
         Copia link manifest
     </button>
@@ -180,7 +188,7 @@ async function startAddon() {
         }
 
         await serveHTTP(addonInterface, addonOptions);
-
+        
         console.log('Addon attivo su:', baseUrl);
         console.log('URL Manifest:', manifestUrl);
 
@@ -190,7 +198,7 @@ async function startAddon() {
         } else {
             console.log('EPG disabilitata, skip inizializzazione');
         }
-
+        
     } catch (error) {
         console.error('Failed to start addon:', error);
         process.exit(1);
