@@ -60,6 +60,15 @@ async function startAddon() {
         const app = express();
         const addonInterface = builder.getInterface();
 
+        // Middleware per gestire il subpath
+        app.use((req, res, next) => {
+            if (config.SUBPATH) {
+                const subpathRegex = new RegExp(`^/${config.SUBPATH}(/|$)`);
+                req.url = req.url.replace(subpathRegex, '/');
+            }
+            next();
+        });
+
         // Generazione pagina installazione
         const generateInstallPage = () => {
             const baseUrl = generatedConfig.getBaseUrl();
@@ -125,15 +134,12 @@ async function startAddon() {
             </html>`;
         };
 
-        // Configurazione percorsi
-        const mountPath = config.SUBPATH ? `/${config.SUBPATH.replace(/^\/|\/$/g, '')}` : '';
-
-        // Route principali
-        app.get(`${mountPath}/`, (req, res) => res.send(generateInstallPage()));
-        app.get(`${mountPath}/manifest.json`, (req, res) => res.json(addonInterface.manifest));
-        app.get(`${mountPath}/stream/:type/:id`, (req, res) => 
+        // Configurazione routes
+        app.get('/', (req, res) => res.send(generateInstallPage()));
+        app.get('/manifest.json', (req, res) => res.json(addonInterface.manifest));
+        app.get('/stream/:type/:id', (req, res) => 
             streamHandler(req.params).then(result => res.json(result)));
-        app.get(`${mountPath}/catalog/:type/:id`, (req, res) => 
+        app.get('/catalog/:type/:id', (req, res) => 
             catalogHandler({ ...req.params, extra: req.query }).then(result => res.json(result)));
 
         // Avvio server
