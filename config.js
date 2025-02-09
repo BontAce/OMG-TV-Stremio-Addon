@@ -9,7 +9,7 @@ const baseConfig = {
     PROXY_URL: process.env.PROXY_URL || null,
     PROXY_PASSWORD: process.env.PROXY_PASSWORD || null,
     FORCE_PROXY: process.env.FORCE_PROXY === 'yes',
-    DOMAIN: process.env.DOMAIN || null,
+    DOMAIN: process.env.DOMAIN ? process.env.DOMAIN.replace(/\/$/, '') : null,
     SUBPATH: process.env.SUBPATH ? process.env.SUBPATH.replace(/^\/|\/$/g, '') : '',
     cacheSettings: {
         updateInterval: 12 * 60 * 60 * 1000,
@@ -60,18 +60,15 @@ function loadCustomConfig() {
     const configOverridePath = path.join(__dirname, 'addon-config.json');
 
     try {
-        const addonConfigExists = fs.existsSync(configOverridePath);
-
-        if (addonConfigExists) {
+        if (fs.existsSync(configOverridePath)) {
             const customConfig = JSON.parse(fs.readFileSync(configOverridePath, 'utf8'));
-            
-            // Merge delle configurazioni con priorità alle env variables
             return {
                 ...baseConfig,
                 ...customConfig,
                 M3U_URL: process.env.M3U_URL || customConfig.M3U_URL || baseConfig.M3U_URL,
                 EPG_URL: process.env.EPG_URL || customConfig.EPG_URL || baseConfig.EPG_URL,
-                SUBPATH: process.env.SUBPATH || customConfig.SUBPATH || baseConfig.SUBPATH
+                SUBPATH: process.env.SUBPATH || customConfig.SUBPATH || baseConfig.SUBPATH,
+                DOMAIN: process.env.DOMAIN || customConfig.DOMAIN || baseConfig.DOMAIN
             };
         }
     } catch (error) {
@@ -83,14 +80,9 @@ function loadCustomConfig() {
 
 const config = loadCustomConfig();
 
-// Funzione per ottenere l'URL base dell'addon ottimizzata per Nginx
 config.getBaseUrl = function() {
-    if (this.DOMAIN) {
-        const domain = this.DOMAIN.replace(/\/$/, '');
-        const subpath = this.SUBPATH ? `/${this.SUBPATH.replace(/^\/|\/$/g, '')}` : '';
-        return `${domain}${subpath}`;
-    }
-    return `http://localhost:${this.port}${this.SUBPATH ? `/${this.SUBPATH}` : ''}`;
+    const base = this.DOMAIN || `http://localhost:${this.port}`;
+    return base + (this.SUBPATH ? `/${this.SUBPATH}` : '');
 };
 
 config.getManifestUrl = function() {
