@@ -5,12 +5,6 @@ const metaHandler = require('./meta-handler');
 const EPGManager = require('./epg-manager');
 const config = require('./config');
 
-// Configurazione dei percorsi
-const BASE_PATH = process.env.BASE_PATH || '';
-const sanitizedBasePath = BASE_PATH ? (BASE_PATH.startsWith('/') ? BASE_PATH : `/${BASE_PATH}`) : '';
-const DOMAIN = process.env.DOMAIN || `http://localhost:${config.port}`;
-const PUBLIC_URL = DOMAIN + (sanitizedBasePath === '' ? '' : sanitizedBasePath + '/');
-
 async function generateConfig() {
     try {
         console.log('\n=== Generazione Configurazione Iniziale ===');
@@ -24,7 +18,6 @@ async function generateConfig() {
             ...config,
             manifest: {
                 ...config.manifest,
-                endpoint: `${PUBLIC_URL}manifest.json`,
                 catalogs: [
                     {
                         ...config.manifest.catalogs[0],
@@ -147,31 +140,23 @@ async function startAddon() {
     <img class="logo" src="${landing.logo}" />
     <h1 style="color: white">${landing.name}</h1>
     <h2 style="color: white">${landing.description}</h2>
-    <button onclick="window.location = 'stremio://' + window.location.host + '${sanitizedBasePath}/manifest.json'">
+    <button onclick="window.location = 'stremio://' + window.location.host + '/manifest.json'">
         Aggiungi a Stremio
     </button>
-    <p style="color: white">URL manifest: ${PUBLIC_URL}manifest.json</p>
+    <p style="color: white">Manifest URL: http://localhost:${generatedConfig.port}/manifest.json</p>
 </body>
 </html>`;
 
         const addonInterface = builder.getInterface();
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
 
-        // Configurazione server semplificata
-        const serverOptions = {
-            port: config.port,
-            landingTemplate
-        };
-
-        // Aggiungi il path solo se è definito
-        if (sanitizedBasePath) {
-            serverOptions.path = sanitizedBasePath;
-        }
-
-        await serveHTTP(addonInterface, serverOptions);
+        await serveHTTP(addonInterface, { 
+            port: generatedConfig.port,
+            landingTemplate 
+        });
         
-        console.log('Addon attivo su:', PUBLIC_URL);
-        console.log('Manifest URL:', `${PUBLIC_URL}manifest.json`);
+        console.log('Addon attivo su:', `http://localhost:${generatedConfig.port}`);
+        console.log('Manifest URL:', `http://localhost:${generatedConfig.port}/manifest.json`);
 
         if (generatedConfig.enableEPG) {
             const cachedData = CacheManager.getCachedData();
