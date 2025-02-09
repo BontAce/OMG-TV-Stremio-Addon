@@ -71,19 +71,14 @@ async function startAddon() {
             await EPGManager.initializeEPG(combinedEpgUrl);
         }
 
-        // Configurazione Express
         const app = express();
         const addonInterface = builder.getInterface();
-
-        // Gestione subpath
         const router = express.Router();
 
-        // Route per il manifest
         router.get('/manifest.json', (req, res) => {
             res.json(addonInterface.manifest);
         });
 
-        // Route per la pagina di installazione principale
         router.get('/', (req, res) => {
             const baseUrl = generatedConfig.getBaseUrl();
             const manifestUrl = generatedConfig.getManifestUrl();
@@ -178,7 +173,6 @@ async function startAddon() {
             `);
         });
 
-        // Route per gestire gli stream e il catalogo
         router.get('/stream/:type/:id', (req, res) => {
             const { type, id } = req.params;
             streamHandler({ type, id }).then(result => res.json(result));
@@ -190,15 +184,16 @@ async function startAddon() {
             catalogHandler({ type, id, extra: { genre, search, skip } }).then(result => res.json(result));
         });
 
-        // Gestione del subpath
         if (generatedConfig.SUBPATH) {
             const subpath = '/' + generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
             app.use(subpath, router);
+            app.get(subpath, (req, res) => {
+                res.redirect(subpath + '/');
+            });
         } else {
-            app.use(router);
+            app.use('/', router);
         }
 
-        // Avvio del server
         const server = app.listen(generatedConfig.port, () => {
             const baseUrl = generatedConfig.getBaseUrl();
             const manifestUrl = generatedConfig.getManifestUrl();
