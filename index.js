@@ -7,7 +7,8 @@ const config = require('./config');
 
 // Add base path configuration
 const BASE_PATH = process.env.BASE_PATH || '/';
-const PUBLIC_URL = process.env.PUBLIC_URL || `http://localhost:${process.env.PORT || 7860}${BASE_PATH}`;
+const DOMAIN = process.env.DOMAIN || `http://localhost:${process.env.PORT || 7860}`;
+const PUBLIC_URL = DOMAIN + BASE_PATH;
 
 async function generateConfig() {
     try {
