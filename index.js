@@ -41,6 +41,20 @@ async function generateConfig() {
             }
         };
 
+        // Costruisci il transportUrl corretto
+        if (finalConfig.DOMAIN) {
+            let domain = finalConfig.DOMAIN.replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+            let transportUrl = domain;
+            
+            if (finalConfig.SUBPATH) {
+                const subpath = finalConfig.SUBPATH.replace(/^\/|\/$/g, '');
+                transportUrl = `${transportUrl}/${subpath}`;
+            }
+            
+            console.log('Transport URL configurato:', transportUrl);
+            finalConfig.manifest.transportUrl = transportUrl;
+        }
+
         console.log('Configurazione generata con i seguenti generi:');
         console.log(data.genres.join(', '));
         if (config.enableEPG) {
@@ -60,22 +74,6 @@ async function generateConfig() {
 async function startAddon() {
     try {
         const generatedConfig = await generateConfig();
-
-        // Aggiornamento transportUrl nel manifest in base al dominio configurato
-        const baseUrl = generatedConfig.getBaseUrl();
-        const manifestUrl = generatedConfig.getManifestUrl();
-        
-        // Prepara il transportUrl mantenendo il percorso completo fino a manifest.json
-        let transportUrl = baseUrl.replace(/^https?:\/\//i, '');
-        if (generatedConfig.SUBPATH) {
-            // Assicurati che il subpath sia incluso correttamente
-            const subpath = generatedConfig.SUBPATH.replace(/^\/|\/$/g, '');
-            transportUrl = `${transportUrl}/${subpath}`;
-        }
-        // Aggiungi manifest.json
-        transportUrl = `${transportUrl}/manifest.json`;
-        generatedConfig.manifest.transportUrl = transportUrl;
-
         const builder = new addonBuilder(generatedConfig.manifest);
 
         builder.defineStreamHandler(streamHandler);
@@ -164,10 +162,6 @@ async function startAddon() {
     <img class="logo" src="${landing.logo}" />
     <h1 style="color: white">${landing.name}</h1>
     <h2 style="color: white">${landing.description}</h2>
-    <button onclick="window.location = 'stremio://${landing.transportUrl}'">
-        Aggiungi a Stremio
-    </button>
-    <p style="color: white">Link: stremio://${landing.transportUrl}</p>
     <button onclick="copyManifestLink()">
         Copia link manifest
     </button>
@@ -177,7 +171,6 @@ async function startAddon() {
         const addonInterface = builder.getInterface();
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
 
-        // Configura il percorso base per l'addon se è definito un sottopercorso
         const addonOptions = {
             port: generatedConfig.port,
             landingTemplate
@@ -188,6 +181,9 @@ async function startAddon() {
         }
 
         await serveHTTP(addonInterface, addonOptions);
+        
+        const baseUrl = generatedConfig.getBaseUrl();
+        const manifestUrl = generatedConfig.getManifestUrl();
         
         console.log('Addon attivo su:', baseUrl);
         console.log('URL Manifest:', manifestUrl);
