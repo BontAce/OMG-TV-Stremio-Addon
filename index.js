@@ -8,7 +8,7 @@ const config = require('./config');
 async function generateConfig() {
     try {
         console.log('\n=== Generazione Configurazione Iniziale ===');
-        
+
         const transformer = new PlaylistTransformer();
         const data = await transformer.loadAndTransform(config.M3U_URL);
         console.log(`Trovati ${data.genres.length} generi`);
@@ -64,13 +64,9 @@ async function startAddon() {
         // Aggiornamento transportUrl nel manifest in base al dominio configurato
         const baseUrl = generatedConfig.getBaseUrl();
         const manifestUrl = generatedConfig.getManifestUrl();
-        
-        // Rimuovi lo schema dal transportUrl e assicurati che includa /manifest.json
+
+        // Prepara il transportUrl mantenendo il percorso completo fino a manifest.json
         const transportUrl = manifestUrl.replace(/^https?:\/\//i, '');
-        // Assicurati che il transportUrl termini con manifest.json
-        if (!transportUrl.endsWith('/manifest.json')) {
-            transportUrl = transportUrl + '/manifest.json';
-        }
         generatedConfig.manifest.transportUrl = transportUrl;
 
         const builder = new addonBuilder(generatedConfig.manifest);
@@ -184,7 +180,7 @@ async function startAddon() {
         }
 
         await serveHTTP(addonInterface, addonOptions);
-        
+
         console.log('Addon attivo su:', baseUrl);
         console.log('URL Manifest:', manifestUrl);
 
@@ -194,7 +190,7 @@ async function startAddon() {
         } else {
             console.log('EPG disabilitata, skip inizializzazione');
         }
-        
+
     } catch (error) {
         console.error('Failed to start addon:', error);
         process.exit(1);
