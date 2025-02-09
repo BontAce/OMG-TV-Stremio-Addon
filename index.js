@@ -7,9 +7,9 @@ const config = require('./config');
 
 // Configurazione dei percorsi
 const BASE_PATH = process.env.BASE_PATH || '';
-const sanitizedBasePath = BASE_PATH.startsWith('/') ? BASE_PATH : `/${BASE_PATH}`;
+const sanitizedBasePath = BASE_PATH ? (BASE_PATH.startsWith('/') ? BASE_PATH : `/${BASE_PATH}`) : '';
 const DOMAIN = process.env.DOMAIN || `http://localhost:${config.port}`;
-const PUBLIC_URL = DOMAIN + (sanitizedBasePath.endsWith('/') ? sanitizedBasePath : sanitizedBasePath + '/');
+const PUBLIC_URL = DOMAIN + (sanitizedBasePath === '' ? '' : sanitizedBasePath + '/');
 
 async function generateConfig() {
     try {
@@ -100,7 +100,6 @@ async function startAddon() {
 <head>
     <meta charset="utf-8">
     <title>${landing.name} - Stremio Addon</title>
-    <base href="${sanitizedBasePath}">
     <style>
         body {
             background: #000;
@@ -143,14 +142,6 @@ async function startAddon() {
             text-decoration: underline;
         }
     </style>
-    <script>
-        function copyManifestLink() {
-            const manifestUrl = window.location.href + 'manifest.json';
-            navigator.clipboard.writeText(manifestUrl).then(() => {
-                alert('Link del manifest copiato negli appunti!');
-            });
-        }
-    </script>
 </head>
 <body>
     <img class="logo" src="${landing.logo}" />
@@ -166,15 +157,14 @@ async function startAddon() {
         const addonInterface = builder.getInterface();
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
 
-        // Configurazione server con gestione dei path
+        // Configurazione server semplificata
         const serverOptions = {
             port: config.port,
-            landingTemplate,
-            static: sanitizedBasePath // Gestione path statico
+            landingTemplate
         };
 
-        // Se c'è un BASE_PATH, lo aggiungiamo alle opzioni
-        if (sanitizedBasePath && sanitizedBasePath !== '/') {
+        // Aggiungi il path solo se è definito
+        if (sanitizedBasePath) {
             serverOptions.path = sanitizedBasePath;
         }
 
