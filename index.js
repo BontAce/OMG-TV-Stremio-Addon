@@ -6,9 +6,12 @@ const EPGManager = require('./epg-manager');
 const config = require('./config');
 
 // Add base path configuration
-const BASE_PATH = process.env.BASE_PATH || '/';
+// Ensure BASE_PATH is a string and starts with /
+const BASE_PATH = process.env.BASE_PATH ? 
+    (process.env.BASE_PATH.startsWith('/') ? process.env.BASE_PATH : '/' + process.env.BASE_PATH) 
+    : '/';
 const DOMAIN = process.env.DOMAIN || `http://localhost:${process.env.PORT || 7860}`;
-const PUBLIC_URL = DOMAIN + BASE_PATH;
+const PUBLIC_URL = DOMAIN + (BASE_PATH === '/' ? '' : BASE_PATH);
 
 async function generateConfig() {
     try {
@@ -179,11 +182,17 @@ async function startAddon() {
             'Access-Control-Allow-Methods': 'GET, OPTIONS'
         };
 
-        await serveHTTP(addonInterface, { 
+        // Only use path if it's not the root directory
+        const serverOptions = { 
             port: process.env.PORT || 7860, 
-            landingTemplate,
-            path: BASE_PATH
-        });
+            landingTemplate
+        };
+        
+        if (BASE_PATH !== '/') {
+            serverOptions.path = BASE_PATH;
+        }
+        
+        await serveHTTP(addonInterface, serverOptions);
         
         console.log('Addon attivo su:', PUBLIC_URL);
         console.log('Manifest URL:', PUBLIC_URL + 'manifest.json');
