@@ -5,13 +5,11 @@ const metaHandler = require('./meta-handler');
 const EPGManager = require('./epg-manager');
 const config = require('./config');
 
-// Add base path configuration
-// Ensure BASE_PATH is a string and starts with /
-const BASE_PATH = process.env.BASE_PATH ? 
-    (process.env.BASE_PATH.startsWith('/') ? process.env.BASE_PATH : '/' + process.env.BASE_PATH) 
-    : '/';
-const DOMAIN = process.env.DOMAIN || `http://localhost:${process.env.PORT || 7860}`;
-const PUBLIC_URL = DOMAIN + (BASE_PATH === '/' ? '' : BASE_PATH);
+// Configurazione dei percorsi
+const BASE_PATH = process.env.BASE_PATH || '';
+const sanitizedBasePath = BASE_PATH.startsWith('/') ? BASE_PATH : `/${BASE_PATH}`;
+const DOMAIN = process.env.DOMAIN || `http://localhost:${config.port}`;
+const PUBLIC_URL = DOMAIN + (sanitizedBasePath.endsWith('/') ? sanitizedBasePath : sanitizedBasePath + '/');
 
 async function generateConfig() {
     try {
@@ -25,20 +23,11 @@ async function generateConfig() {
         const finalConfig = {
             ...config,
             manifest: {
-                id: "org.mccoy88f.omgplustvbeta",
-                version: "3.4.0",
-                name: "OMG+ TV beta",
-                description: "Un add-on per Stremio con playlist di canali M3U predefinita, con personalizzazione di playlist e epg.",
-                logo: "https://raw.githubusercontent.com/mccoy88f/OMG-Plus-TV-Stremio-Addon/refs/heads/main/tv.png",
-                resources: ["stream", "catalog", "meta"],
-                types: ["tv"],
-                idPrefixes: ["tv"],
-                endpoint: PUBLIC_URL + 'manifest.json',
+                ...config.manifest,
+                endpoint: `${PUBLIC_URL}manifest.json`,
                 catalogs: [
                     {
-                        type: 'tv',
-                        id: 'omg_plus_tv',
-                        name: 'OMG+ TV',
+                        ...config.manifest.catalogs[0],
                         extra: [
                             {
                                 name: 'genre',
@@ -85,12 +74,14 @@ async function startAddon() {
         builder.defineMetaHandler(metaHandler);
 
         const CacheManager = require('./cache-manager')(generatedConfig);
+
         await CacheManager.updateCache(true).catch(error => {
-            console.error('Error updating cache on startup:', error);
+            console.error('Errore aggiornamento cache iniziale:', error);
         });
 
         const cachedData = CacheManager.getCachedData();
         const allEpgUrls = [];
+        
         if (generatedConfig.EPG_URL) {
             allEpgUrls.push(generatedConfig.EPG_URL);
         }
@@ -109,7 +100,7 @@ async function startAddon() {
 <head>
     <meta charset="utf-8">
     <title>${landing.name} - Stremio Addon</title>
-    <base href="${BASE_PATH}">
+    <base href="${sanitizedBasePath}">
     <style>
         body {
             background: #000;
@@ -165,7 +156,7 @@ async function startAddon() {
     <img class="logo" src="${landing.logo}" />
     <h1 style="color: white">${landing.name}</h1>
     <h2 style="color: white">${landing.description}</h2>
-    <button onclick="window.location = 'stremio://' + window.location.host + '${BASE_PATH}manifest.json'">
+    <button onclick="window.location = 'stremio://' + window.location.host + '${sanitizedBasePath}/manifest.json'">
         Aggiungi a Stremio
     </button>
     <p style="color: white">URL manifest: ${PUBLIC_URL}manifest.json</p>
@@ -175,27 +166,22 @@ async function startAddon() {
         const addonInterface = builder.getInterface();
         const serveHTTP = require('stremio-addon-sdk/src/serveHTTP');
 
-        // Add CORS headers
-        const corsHeaders = {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Headers': '*',
-            'Access-Control-Allow-Methods': 'GET, OPTIONS'
+        // Configurazione server con gestione dei path
+        const serverOptions = {
+            port: config.port,
+            landingTemplate,
+            static: sanitizedBasePath // Gestione path statico
         };
 
-        // Only use path if it's not the root directory
-        const serverOptions = { 
-            port: process.env.PORT || 7860, 
-            landingTemplate
-        };
-        
-        if (BASE_PATH !== '/') {
-            serverOptions.path = BASE_PATH;
+        // Se c'è un BASE_PATH, lo aggiungiamo alle opzioni
+        if (sanitizedBasePath && sanitizedBasePath !== '/') {
+            serverOptions.path = sanitizedBasePath;
         }
-        
+
         await serveHTTP(addonInterface, serverOptions);
         
         console.log('Addon attivo su:', PUBLIC_URL);
-        console.log('Manifest URL:', PUBLIC_URL + 'manifest.json');
+        console.log('Manifest URL:', `${PUBLIC_URL}manifest.json`);
 
         if (generatedConfig.enableEPG) {
             const cachedData = CacheManager.getCachedData();
@@ -205,7 +191,7 @@ async function startAddon() {
         }
         
     } catch (error) {
-        console.error('Failed to start addon:', error);
+        console.error('Errore durante l\'avvio dell\'addon:', error);
         process.exit(1);
     }
 }
